@@ -1,0 +1,46 @@
+ext {
+    services = [
+            "order-service",
+            "orchestrator-service",
+            "product-validation-service",
+            "payment-service",
+            "inventory-service"
+    ]
+}
+
+task buildAll {
+    description = 'Builda todos os microserviços'
+    group = 'pipeline'
+
+    doLast {
+        services.each { service ->
+            println "🔨 Buildando ${service}..."
+            exec {
+                workingDir service
+                commandLine './gradlew', 'build', '-x', 'test'
+            }
+        }
+    }
+}
+
+task dockerUp(type: Exec) {
+    description = 'Sobe os containers com Docker Compose'
+    group = 'pipeline'
+
+    commandLine 'docker-compose', 'up', '--build', '-d'
+}
+
+task dockerDown(type: Exec) {
+    description = 'Derruba os containers e limpa'
+    group = 'pipeline'
+
+    commandLine 'docker-compose', 'down'
+}
+
+task fullPipeline {
+    description = 'Executa toda a pipeline: build + docker'
+    group = 'pipeline'
+
+    dependsOn buildAll
+    finalizedBy dockerUp
+}

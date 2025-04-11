@@ -1,16 +1,79 @@
-version: '3'
+# =============================
+# Docker Compose – Infrastructure
+# JavaSpringKafka_Saga_Orchestration
+# =============================
 
 services:
-
-  kafka:
-    container_name: kafka
-    image: obsidiandynamics/kafka
-    restart: "no"
+  # -----------------------------
+  # MongoDB for Order Service
+  # -----------------------------
+  order-db:
+    image: mongo:latest
+    container_name: order-db
+    restart: always
     ports:
-      - "2181:2181"
-      - "9092:9092"
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=654321
     networks:
       - orchestrator-saga
+
+  # -----------------------------
+  # PostgreSQL for Product Service
+  # -----------------------------
+  product-db:
+    image: postgres:latest
+    container_name: product-db
+    ports:
+      - "55432:5432"  # Avoid conflict with local PostgreSQL
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=product_db
+    networks:
+      - orchestrator-saga
+
+  # -----------------------------
+  # PostgreSQL for Payment Service
+  # -----------------------------
+  payment-db:
+    image: postgres:latest
+    container_name: payment-db
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=payment_db
+    networks:
+      - orchestrator-saga
+
+  # -----------------------------
+  # PostgreSQL for Inventory Service
+  # -----------------------------
+  inventory-db:
+    image: postgres:latest
+    container_name: inventory-db
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=inventory_db
+    networks:
+      - orchestrator-saga
+
+  # -----------------------------
+  # Kafka Broker
+  # -----------------------------
+  kafka:
+    image: obsidiandynamics/kafka
+    container_name: kafka
+    restart: "no"
+    ports:
+      - "2181:2181"  # Zookeeper (Kafka internal dependency)
+      - "9092:9092"  # Kafka external access
     environment:
       KAFKA_LISTENERS: "INTERNAL://:29092,EXTERNAL://:9092"
       KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
@@ -22,25 +85,33 @@ services:
       ZOOKEEPER_AUTOPURGE_PURGE_INTERVAL: "0"
     volumes:
       - ./data/kafka/data:/var/lib/kafka/data
-
-  redpanda-console:
-    container_name: redpanda
-    image: docker.redpanda.com/vectorized/console:latest
-    restart: on-failure
-    entrypoint: /bin/sh
-    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
-    ports:
-      - "8081:8080"
     networks:
       - orchestrator-saga
+
+  # -----------------------------
+  # Redpanda Console (Kafka UI)
+  # -----------------------------
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.3.8
+    container_name: redpanda
+    restart: on-failure
+    ports:
+      - "8081:8080"
+    entrypoint: /bin/sh
+    command: -c "echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console"
     environment:
       CONFIG_FILEPATH: /tmp/config.yml
       CONSOLE_CONFIG_FILE: |
         kafka:
           brokers: ["kafka:29092"]
     depends_on:
-      - "kafka"
+      - kafka
+    networks:
+      - orchestrator-saga
 
+# -----------------------------
+# Networks
+# -----------------------------
 networks:
   orchestrator-saga:
     driver: bridge
